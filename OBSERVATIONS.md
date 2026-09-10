@@ -9,7 +9,8 @@
 | 2026-09-02T10:10:19+00:00 | 242 | client transfer prohibited | 404 | 104.21.39.97, 172.67.144.10 | —（未設定） | 変化なし |
 | 2026-09-02T10:37:24+00:00 | 242 | client transfer prohibited | 404 | 104.21.39.97, 172.67.144.10 | —（未設定） | DNS SOA: ['brett.ns.cloudflare.com. dns.cloudflare.com. 2413445335 10000 2400 604800 1800'] -> ['brett.ns.cloudflare.com. dns.cloudflare.com. 2413829455 10000 2400 604800 1800'] |
 | 2026-09-02T10:39:27+00:00 | 242 | client transfer prohibited | 404 | 104.21.39.97, 172.67.144.10 | —（未設定） | 変化なし |
+| 2026-09-10T14:57:58+00:00 | 234 | client transfer prohibited | 404 | 104.21.39.97, 172.67.144.10 | —（未設定） | /robots.txt: None -> 200／/cdn-cgi/trace: None -> 200 |
 
 ---
 
-最終更新: 2026-09-02T10:39:28+00:00
+最終更新: 2026-09-10T14:58:10+00:00

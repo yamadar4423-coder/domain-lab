@@ -13,6 +13,7 @@
 
 import json
 import sys
+import time
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
@@ -21,6 +22,10 @@ from pathlib import Path
 DOMAIN = "dual-orbit.net"
 TLD_RDAP = "https://rdap.verisign.com/net/v1/domain/"
 DOH = "https://dns.google/resolve"
+CRT = "https://crt.sh/?q=%s&output=json"
+# 人が手を引いたあとも動き続けている仕組み（＝生命維持装置）を観測する対象。
+# 失効時にこれらが順に止まるはずで、その順番と時差こそが記録する価値のあるもの。
+LIFE_SUPPORT_PATHS = ["/robots.txt", "/cdn-cgi/trace"]
 RECORD_TYPES = ["A", "AAAA", "MX", "TXT", "NS", "CAA", "SOA"]
 SUBDOMAINS = ["www", "api", "blog", "photos", "test"]
 
@@ -86,6 +91,66 @@ def probe_http():
         return {"code": None, "error": type(e).__name__}
 
 
+def probe_certs():
+    """証明書透明性ログ（crt.sh）から、いま誰がこのドメインの証明書を出しているかを見る。
+
+    サイトの中身が空でも、CDNは証明書を自動更新し続ける。
+    **人が放棄したあとも機械が世話を続けている**という事実を捉えるための指標であり、
+    失効後にこの更新が止まることまでを含めて記録したい。
+    """
+    # crt.sh は負荷時に 502 を返すことがある。無人運用で欠測しないよう数回試す。
+    req = urllib.request.Request(
+        CRT % DOMAIN, headers={"User-Agent": UA, "Accept": "application/json"})
+    data = None
+    last = None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=45) as r:
+                data = json.loads(r.read().decode("utf-8"))
+            break
+        except urllib.error.HTTPError as e:
+            last = "http_%s" % e.code
+        except Exception as e:
+            last = type(e).__name__
+        if attempt < 2:
+            time.sleep(5)
+    if data is None:
+        return {"error": last}
+    if not isinstance(data, list) or not data:
+        return {"count": 0}
+    data.sort(key=lambda c: c.get("not_before", ""), reverse=True)
+    latest = data[0]
+
+    def org(c):
+        # "C=US, O=Let's Encrypt, CN=YE2" から発行組織だけ取り出す
+        for part in (c.get("issuer_name") or "").split(","):
+            part = part.strip()
+            if part.startswith("O="):
+                return part[2:].strip()
+        return "?"
+
+    return {
+        "count": len(data),
+        "issuers": sorted({org(c) for c in data}),
+        "latest_issuer": org(latest),
+        "latest_not_before": (latest.get("not_before") or "")[:10],
+        "latest_not_after": (latest.get("not_after") or "")[:10],
+    }
+
+
+def probe_path(path):
+    """パス単位の応答。中身が無いドメインでも、CDNが独自に返すものがある。"""
+    req = urllib.request.Request("https://" + DOMAIN + path,
+                                 headers={"User-Agent": UA})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return {"code": r.status, "bytes": len(r.read(8192))}
+    except urllib.error.HTTPError as e:
+        return {"code": e.code, "bytes": 0}
+    except Exception as e:
+        return {"code": None, "error": type(e).__name__}
+
+
 def collect():
     now = datetime.now(timezone.utc)
     obs = {
@@ -95,6 +160,8 @@ def collect():
         "dns": {t: probe_dns(DOMAIN, t) for t in RECORD_TYPES},
         "subdomains": {s: probe_dns("%s.%s" % (s, DOMAIN), "A") for s in SUBDOMAINS},
         "http": probe_http(),
+        "certs": probe_certs(),
+        "life_support": {p: probe_path(p) for p in LIFE_SUPPORT_PATHS},
     }
     exp = obs["rdap"].get("expiration")
     if exp:
@@ -140,6 +207,16 @@ def diff(prev, cur):
     a, b = prev.get("http", {}).get("code"), cur.get("http", {}).get("code")
     if a != b:
         changes.append("HTTP: %s -> %s" % (a, b))
+    for key in ("latest_not_before", "latest_not_after", "latest_issuer"):
+        a = prev.get("certs", {}).get(key)
+        b = cur.get("certs", {}).get(key)
+        if a != b and b is not None:
+            changes.append("証明書 %s: %s -> %s" % (key, a, b))
+    for p in LIFE_SUPPORT_PATHS:
+        a = prev.get("life_support", {}).get(p, {}).get("code")
+        b = cur.get("life_support", {}).get(p, {}).get("code")
+        if a != b:
+            changes.append("%s: %s -> %s" % (p, a, b))
     return changes
 
 
@@ -173,10 +250,16 @@ def render(rows):
 
 
 def main():
+    dry = "--dry" in sys.argv
     DATA.mkdir(parents=True, exist_ok=True)
     prev = load_previous()
     cur = collect()
     cur["changes"] = diff(prev, cur)
+
+    if dry:
+        # 記録せずに中身だけ確認する（観測系列を汚さずに動作確認するため）
+        print(json.dumps(cur, ensure_ascii=False, indent=2))
+        return 0
 
     with JSONL.open("a", encoding="utf-8") as f:
         f.write(json.dumps(cur, ensure_ascii=False) + "\n")

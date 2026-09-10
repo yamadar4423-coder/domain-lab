@@ -56,6 +56,8 @@ def build(rows):
         for k, v, u in cards
     )
 
+    certs = latest.get("certs", {}) or {}
+    life = latest.get("life_support", {}) or {}
     facts = [
         ("registrar", joined(rdap.get("registrar"))),
         ("status", joined(rdap.get("status"))),
@@ -65,6 +67,15 @@ def build(rows):
         ("MX", joined(dns.get("MX", {}).get("answers"), "—（未設定）")),
         ("TXT", joined(dns.get("TXT", {}).get("answers"))),
         ("CAA", joined(dns.get("CAA", {}).get("answers"))),
+        ("最新の証明書", "%s が %s に発行 → %s まで有効" % (
+            certs.get("latest_issuer", "—"),
+            certs.get("latest_not_before", "—"),
+            certs.get("latest_not_after", "—"))
+         if certs.get("latest_issuer") else "—"),
+        ("証明書の発行元", joined(certs.get("issuers"))),
+        ("/robots.txt", "HTTP %s（%s バイト）" % (
+            life.get("/robots.txt", {}).get("code", "—"),
+            life.get("/robots.txt", {}).get("bytes", 0))),
     ]
     fact_html = "\n".join(
         "      <tr><td>%s</td><td>%s</td></tr>" % (esc(k), esc(v)) for k, v in facts
@@ -141,7 +152,9 @@ TEMPLATE = """<!DOCTYPE html>
 <div class="wrap">
   <h1>%(domain)s 観測ログ</h1>
   <p class="sub">更新を停止したドメインが失効するまでを、公開情報だけで定点観測している。
-  このページは観測データから自動生成される。</p>
+  このページは観測データから自動生成される。<br>
+  中身は空（404）だが、証明書は今も自動更新され続けている。
+  <strong>持ち主が手を引いたあとも動き続けている仕組み</strong>が、いつ止まるのかを記録している。</p>
 
   <div class="cards">
 %(cards)s

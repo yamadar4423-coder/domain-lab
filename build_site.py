@@ -57,6 +57,7 @@ def build(rows):
     )
 
     certs = latest.get("certs", {}) or {}
+    tls = latest.get("tls", {}) or {}
     life = latest.get("life_support", {}) or {}
     facts = [
         ("registrar", joined(rdap.get("registrar"))),
@@ -67,12 +68,12 @@ def build(rows):
         ("MX", joined(dns.get("MX", {}).get("answers"), "—（未設定）")),
         ("TXT", joined(dns.get("TXT", {}).get("answers"))),
         ("CAA", joined(dns.get("CAA", {}).get("answers"))),
-        ("最新の証明書", "%s が %s に発行 → %s まで有効" % (
-            certs.get("latest_issuer", "—"),
-            certs.get("latest_not_before", "—"),
-            certs.get("latest_not_after", "—"))
-         if certs.get("latest_issuer") else "—"),
-        ("証明書の発行元", joined(certs.get("issuers"))),
+        ("いま提示されている証明書", "%s が %s に発行 → %s まで有効" % (
+            tls.get("issuer_org", "—"),
+            tls.get("not_before", "—"),
+            tls.get("not_after", "—"))
+         if tls.get("issuer_org") else "取得できず（%s）" % tls.get("error", "—")),
+        ("これまでの発行元", joined(certs.get("issuers"), "—（取得できず）")),
         ("/robots.txt", "HTTP %s（%s バイト）" % (
             life.get("/robots.txt", {}).get("code", "—"),
             life.get("/robots.txt", {}).get("bytes", 0))),
@@ -174,7 +175,8 @@ TEMPLATE = """<!DOCTYPE html>
   </table></div>
 
   <footer>
-    出典: RDAP (rdap.verisign.com) / DNS-over-HTTPS / HTTP応答。すべて認証不要の公開情報。<br>
+    出典: RDAP (rdap.verisign.com) / DNS-over-HTTPS / HTTP応答 / TLS証明書（直接接続して取得）。<br>
+    すべて認証不要の公開情報で、ログインもAPIキーも使っていない。<br>
     生成: %(generated)s ・ 失効予定: %(expiry)s
   </footer>
 </div>

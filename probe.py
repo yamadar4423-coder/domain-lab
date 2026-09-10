@@ -12,6 +12,8 @@
 """
 
 import json
+import socket
+import ssl
 import sys
 import time
 import urllib.request
@@ -138,6 +140,51 @@ def probe_certs():
     }
 
 
+def probe_tls():
+    """いま実際に提示されている証明書を、自分でTLS接続して読む。
+
+    crt.sh（第三者のログ）は 502 を返すことが多く、無人運用の観測源としては信用できない
+    （2026-09-10 の GitHub Actions 実行で実際に欠測した）。
+    こちらは相手のサーバーに直接聞くだけなので、第三者サービスの調子に左右されない。
+
+    **失効が近づくと、まずこの証明書の更新が止まり、最後は接続そのものが失敗する。**
+    その順番を捉えるのがこの観測の狙い。
+    """
+    ctx = ssl.create_default_context()
+    try:
+        with socket.create_connection((DOMAIN, 443), timeout=TIMEOUT) as sock:
+            with ctx.wrap_socket(sock, server_hostname=DOMAIN) as tls:
+                cert = tls.getpeercert()
+                version = tls.version()
+    except Exception as e:
+        return {"error": type(e).__name__}
+
+    def flatten(seq):
+        out = {}
+        for rdn in seq or ():
+            for k, v in rdn:
+                out[k] = v
+        return out
+
+    def as_date(s):
+        # 'Aug 31 07:30:06 2026 GMT' → '2026-08-31'
+        try:
+            return time.strftime("%Y-%m-%d", time.strptime(s, "%b %d %H:%M:%S %Y %Z"))
+        except (ValueError, TypeError):
+            return s
+
+    issuer = flatten(cert.get("issuer"))
+    subject = flatten(cert.get("subject"))
+    return {
+        "tls_version": version,
+        "issuer_org": issuer.get("organizationName"),
+        "issuer_cn": issuer.get("commonName"),
+        "subject_cn": subject.get("commonName"),
+        "not_before": as_date(cert.get("notBefore")),
+        "not_after": as_date(cert.get("notAfter")),
+    }
+
+
 def probe_path(path):
     """パス単位の応答。中身が無いドメインでも、CDNが独自に返すものがある。"""
     req = urllib.request.Request("https://" + DOMAIN + path,
@@ -160,6 +207,7 @@ def collect():
         "dns": {t: probe_dns(DOMAIN, t) for t in RECORD_TYPES},
         "subdomains": {s: probe_dns("%s.%s" % (s, DOMAIN), "A") for s in SUBDOMAINS},
         "http": probe_http(),
+        "tls": probe_tls(),
         "certs": probe_certs(),
         "life_support": {p: probe_path(p) for p in LIFE_SUPPORT_PATHS},
     }
@@ -207,6 +255,11 @@ def diff(prev, cur):
     a, b = prev.get("http", {}).get("code"), cur.get("http", {}).get("code")
     if a != b:
         changes.append("HTTP: %s -> %s" % (a, b))
+    for key in ("not_after", "not_before", "issuer_org"):
+        a = prev.get("tls", {}).get(key)
+        b = cur.get("tls", {}).get(key)
+        if a != b and b is not None:
+            changes.append("TLS証明書 %s: %s -> %s" % (key, a, b))
     for key in ("latest_not_before", "latest_not_after", "latest_issuer"):
         a = prev.get("certs", {}).get(key)
         b = cur.get("certs", {}).get(key)

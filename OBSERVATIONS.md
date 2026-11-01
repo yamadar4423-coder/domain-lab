@@ -12,7 +12,8 @@
 | 2026-09-10T14:57:58+00:00 | 234 | client transfer prohibited | 404 | 104.21.39.97, 172.67.144.10 | —（未設定） | /robots.txt: None -> 200／/cdn-cgi/trace: None -> 200 |
 | 2026-09-10T15:00:47+00:00 | 234 | client transfer prohibited | 404 | 104.21.39.97, 172.67.144.10 | —（未設定） | TLS証明書 not_after: None -> 2026-11-29／TLS証明書 not_before: None -> 2026-08-31／TLS証明書 issuer_org: None -> Google Trust Services |
 | 2026-10-01T09:34:38+00:00 | 213 | client transfer prohibited | 404 | 104.21.39.97, 172.67.144.10 | —（未設定） | DNS SOA: ['brett.ns.cloudflare.com. dns.cloudflare.com. 2413829455 10000 2400 604800 1800'] -> ['brett.ns.cloudflare.com. dns.cloudflare.com. 2415473733 10000 2400 604800 1800']／証明書 latest_not_before: None -> 2026-08-31／証明書 latest_not_after: None -> 2026-11-29／証明書 latest_issuer: None -> Google Trust Services |
+| 2026-11-01T09:53:06+00:00 | 182 | client transfer prohibited | 404 | 104.21.39.97, 172.67.144.10 | —（未設定） | DNS SOA: ['brett.ns.cloudflare.com. dns.cloudflare.com. 2415473733 10000 2400 604800 1800'] -> ['brett.ns.cloudflare.com. dns.cloudflare.com. 2418545673 10000 2400 604800 1800']／TLS証明書 not_after: 2026-11-29 -> 2027-01-27／TLS証明書 not_before: 2026-08-31 -> 2026-10-29 |
 
 ---
 
-最終更新: 2026-10-01T09:34:45+00:00
+最終更新: 2026-11-01T09:53:09+00:00
